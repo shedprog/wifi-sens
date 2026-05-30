@@ -1,5 +1,7 @@
 #include <Arduino.h>
 
+#include <Adafruit_NeoPixel.h>
+
 extern "C" {
 #include "esp_err.h"
 #include "esp_event.h"
@@ -45,6 +47,15 @@ extern "C" {
 static constexpr uint32_t SERIAL_BAUD = 921600;
 static constexpr uint32_t SEND_INTERVAL_MS =
   (1000UL / CSI_SEND_FREQUENCY) > 0 ? (1000UL / CSI_SEND_FREQUENCY) : 1UL;
+static constexpr uint8_t SENDER_LED_BLUE_PIN = 48;
+static constexpr uint32_t LED_BLINK_MS = 1000;
+static bool senderLedOn = false;
+static uint32_t lastLedToggleMs = 0;
+static constexpr uint8_t SENDER_LED_BRIGHTNESS = 50;
+static const uint8_t SENDER_LED_COUNT = 1;
+static Adafruit_NeoPixel senderStrip(SENDER_LED_COUNT,
+                                    SENDER_LED_BLUE_PIN,
+                                    NEO_GRB + NEO_KHZ800);
 static const uint8_t CSI_SEND_MAC[] = {
   CSI_SEND_MAC0, CSI_SEND_MAC1, CSI_SEND_MAC2, CSI_SEND_MAC3, CSI_SEND_MAC4, CSI_SEND_MAC5
 };
@@ -219,6 +230,12 @@ void setup() {
   Serial.begin(SERIAL_BAUD);
   delay(2000);
 
+  senderStrip.begin();
+  senderStrip.setBrightness(SENDER_LED_BRIGHTNESS);
+  senderStrip.clear();
+  senderStrip.show();
+  Serial.printf("# Sender LED pin=%u\n", SENDER_LED_BLUE_PIN);
+
   printStartupInfo();
 
   senderReady = initWifi() && initEspNow();
@@ -230,6 +247,14 @@ void setup() {
 }
 
 void loop() {
+  if (millis() - lastLedToggleMs >= LED_BLINK_MS) {
+    lastLedToggleMs = millis();
+    senderLedOn = !senderLedOn;
+    senderStrip.setPixelColor(0, senderLedOn ? senderStrip.Color(0, 0, 255)
+                                            : senderStrip.Color(0, 0, 0));
+    senderStrip.show();
+  }
+
   if (!senderReady) {
     delay(1000);
     return;
@@ -244,6 +269,5 @@ void loop() {
                   esp_err_to_name(error));
   }
 
-  sendCount++;
   delay(SEND_INTERVAL_MS);
 }

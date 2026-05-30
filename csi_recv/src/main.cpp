@@ -13,6 +13,8 @@ extern "C" {
 #include "rom/ets_sys.h"
 }
 
+#include <Adafruit_NeoPixel.h>
+
 #ifndef CSI_RECV_CHANNEL
 #define CSI_RECV_CHANNEL 11
 #endif
@@ -44,6 +46,15 @@ static constexpr uint32_t SERIAL_BAUD = 2000000;
 static constexpr uint32_t STATUS_INTERVAL_MS = 5000;
 static constexpr size_t RADAR_MAX_PAIRS = 384;
 static constexpr size_t RADAR_HISTORY_LEN = 100;
+static constexpr uint8_t RECEIVER_LED_GREEN_PIN = 48;
+static constexpr uint32_t LED_BLINK_MS = 1000;
+static bool receiverLedOn = false;
+static uint32_t lastLedToggleMs = 0;
+static constexpr uint8_t RECEIVER_LED_BRIGHTNESS = 50;
+static const uint8_t RECEIVER_LED_COUNT = 1;
+static Adafruit_NeoPixel receiverStrip(RECEIVER_LED_COUNT,
+                                     RECEIVER_LED_GREEN_PIN,
+                                     NEO_GRB + NEO_KHZ800);
 
 static const uint8_t CSI_SEND_MAC[] = {
   CSI_SEND_MAC0, CSI_SEND_MAC1, CSI_SEND_MAC2, CSI_SEND_MAC3, CSI_SEND_MAC4, CSI_SEND_MAC5
@@ -323,21 +334,21 @@ void printRadarData(const wifi_csi_info_t *info) {
   const int moveStatus = jitter > moveThreshold ? 1 : 0;
 
   if (radarSequence == 0) {
-    ets_printf("# ================ RADAR RECV ================\n");
-    ets_printf("type,sequence,timestamp,waveform_wander,wander_average,waveform_wander_threshold,someone_status,waveform_jitter,jitter_midean,waveform_jitter_threshold,move_status\n");
+    Serial.printf("# ================ RADAR RECV ================\n");
+    Serial.printf("type,sequence,timestamp,waveform_wander,wander_average,waveform_wander_threshold,someone_status,waveform_jitter,jitter_midean,waveform_jitter_threshold,move_status\n");
   }
 
-  ets_printf("RADAR_DADA,%lu,%lu,%.6f,%.6f,%.6f,%d,%.6f,%.6f,%.6f,%d\n",
-             static_cast<unsigned long>(radarSequence++),
-             static_cast<unsigned long>(millis()),
-             wander,
-             wanderAverage,
-             someoneThreshold,
-             someoneStatus,
-             jitter,
-             jitterMedian,
-             moveThreshold,
-             moveStatus);
+  Serial.printf("RADAR_DADA,%lu,%lu,%.6f,%.6f,%.6f,%d,%.6f,%.6f,%.6f,%d\n",
+                static_cast<unsigned long>(radarSequence++),
+                static_cast<unsigned long>(millis()),
+                wander,
+                wanderAverage,
+                someoneThreshold,
+                someoneStatus,
+                jitter,
+                jitterMedian,
+                moveThreshold,
+                moveStatus);
 }
 
 void onCsiData(void *, wifi_csi_info_t *info) {
@@ -445,6 +456,12 @@ void setup() {
   Serial.begin(SERIAL_BAUD);
   delay(2000);
 
+  receiverStrip.begin();
+  receiverStrip.setBrightness(RECEIVER_LED_BRIGHTNESS);
+  receiverStrip.clear();
+  receiverStrip.show();
+  Serial.printf("# Receiver LED pin=%u\n", RECEIVER_LED_GREEN_PIN);
+
   printStartupInfo();
 
   receiverReady = initWifi() && initEspNow() && initCsi();
@@ -469,4 +486,11 @@ void loop() {
 #endif
 
   delay(20);
+  if (millis() - lastLedToggleMs >= LED_BLINK_MS) {
+    lastLedToggleMs = millis();
+    receiverLedOn = !receiverLedOn;
+    receiverStrip.setPixelColor(0, receiverLedOn ? receiverStrip.Color(0, 255, 0)
+                                             : receiverStrip.Color(0, 0, 0));
+    receiverStrip.show();
+  }
 }
