@@ -1,0 +1,7 @@
+platformio
+numpy
+pandas
+pyserial
+PyQt5
+pyqtgraph
+scipy
